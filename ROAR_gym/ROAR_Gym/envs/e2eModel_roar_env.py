@@ -106,13 +106,16 @@ class ROARppoEnvE2E(ROAREnv):
         self.steps+=1
         for i in range(1):
             # throttle=(action[i*3]+0.5)/2+1
-            check = (action[i*3+0]+0.5)/2+1
-            if check > 0.5:
-                throttle = 1
-                braking = 0
-            else:
-                throttle = 0
-                braking = .8
+            # check = (action[i*3+0]+0.5)/2+1
+            # if check > 0.5:
+            #     throttle = 1
+            #     braking = 0
+            # else:
+            #     throttle = 0
+            #     braking = .8
+
+            throttle = .5
+            braking = 0
 
 
             steering = action[i*3+1]/5
@@ -198,28 +201,31 @@ class ROARppoEnvE2E(ROAREnv):
     def get_reward(self) -> float:
         # prep for reward computation
         # reward = -0.1*(1-self.agent.vehicle.control.throttle+10*self.agent.vehicle.control.braking+abs(self.agent.vehicle.control.steering))*400/8
+
+        #Hot water penalty
         reward=-1
 
         if self.crash_check:
             print("no reward")
             return 0
 
-
+        #waypoint reward
         if self.agent.cross_reward > self.prev_cross_reward:
             reward += (self.agent.cross_reward - self.prev_cross_reward)*self.agent.interval*self.time_to_waypoint_ratio
 
 
-
+        #reverse penalty
         if not (self.agent.bbox_list[(self.agent.int_counter - self.death_line_dis) % len(self.agent.bbox_list)].has_crossed(self.agent.vehicle.transform))[0]:
             reward -= 200
             self.crash_check = True
 
+        #stalled penalty
         if self.agent.int_counter > 5 and self.agent.vehicle.get_speed(self.agent.vehicle) < 1:
             self.stopped_counter += 1
             if self.stopped_counter >= self.stopped_max_count:
                 reward -= 200
                 self.crash_check = True
-
+        #crash penalty
         if self.carla_runner.get_num_collision() > 0:
             reward -= 200
             self.crash_check = True

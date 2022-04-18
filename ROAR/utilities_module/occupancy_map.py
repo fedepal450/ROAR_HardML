@@ -356,7 +356,7 @@ class OccupancyGridMap(Module):
             vehicle_x,vehicle_y=self.location_to_occu_cord(location=transform_list[i].location)[0]
             vehicle_x+=(first_cut_size[0] // 2)-x
             vehicle_y+=(first_cut_size[1] // 2)-y
-            v_map[vehicle_y-3:vehicle_y+4, vehicle_x-3:vehicle_x+4] = 0.8
+            v_map[vehicle_y-2:vehicle_y+3, vehicle_x-4:vehicle_x+4] = 0.8
 
             w_map=map_to_view.copy()
             w_map[w_map>=1]-=1
@@ -384,7 +384,12 @@ class OccupancyGridMap(Module):
             tmp.append(sum(tmp))
             ret.append(tmp)
 
-        return np.array(ret)
+            final_ret = np.array(ret)
+            blindspot_array = np.zeros((28,84))
+            for j in range(len(ret)):
+                final_ret[j][0][56:84][:] = blindspot_array
+
+        return final_ret
 
 
     def cropped_occu_to_world(self,
