@@ -66,6 +66,7 @@ class ROARppoEnvE2E(ROAREnv):
         self.ep_rewards = 0
         self.frame_reward = 0
         self.highscore = -1000
+
         self.highest_chkpt = 0
         self.speeds = []
         self.prev_int_counter = 0
@@ -75,18 +76,18 @@ class ROARppoEnvE2E(ROAREnv):
         self.complete_loop=False
         self.his_checkpoint=[]
         self.his_score=[]
-        self.time_to_waypoint_ratio = 0.25
+        self.time_to_waypoint_ratio = 1
         # self.crash_step=0
         # self.reward_step=0
         # self.reset_by_crash=True
-        self.fps=8
+        self.fps = 8
         # self.crash_tol=5
         # self.reward_tol=5
         # self.end_check=False
         self.death_line_dis = 5
         ## used to check if stalled
         self.stopped_counter = 0
-        self.stopped_max_count = 10
+        self.stopped_max_count = 100
         # used to track episode highspeed
         self.speed = 0
         self.current_hs = 0
@@ -115,13 +116,13 @@ class ROARppoEnvE2E(ROAREnv):
             #     braking = .8
 
             throttle = .5
-            braking = 0
+            braking = 0.0
 
 
             steering = action[i*3+1]/5
 
             if self.deadzone_trigger and abs(steering) < self.deadzone_level:
-                steering = 0
+                steering = 0.0
 
 
             self.agent.kwargs["control"] = VehicleControl(throttle=throttle,
@@ -188,8 +189,8 @@ class ROARppoEnvE2E(ROAREnv):
     def _terminal(self) -> bool:
         if self.stopped_counter >= self.stopped_max_count:
             return True
-        if not (self.agent.bbox_list[(self.agent.int_counter - self.death_line_dis) % len(self.agent.bbox_list)].has_crossed(self.agent.vehicle.transform))[0]:
-            return True
+        # if not (self.agent.bbox_list[(self.agent.int_counter - self.death_line_dis) % len(self.agent.bbox_list)].has_crossed(self.agent.vehicle.transform))[0]:
+        #     return True
         if self.carla_runner.get_num_collision() > self.max_collision_allowed:
             return True
         elif self.agent.finish_loop:
@@ -202,38 +203,40 @@ class ROARppoEnvE2E(ROAREnv):
         # prep for reward computation
         # reward = -0.1*(1-self.agent.vehicle.control.throttle+10*self.agent.vehicle.control.braking+abs(self.agent.vehicle.control.steering))*400/8
 
-        #Hot water penalty
-        reward=-1
+        #Life reward
+        reward = 1
+        if self.agent.vehicle.control.steering == 0.0:
+            reward += 3
 
         if self.crash_check:
             print("no reward")
             return 0
 
-        #waypoint reward
-        if self.agent.cross_reward > self.prev_cross_reward:
-            reward += (self.agent.cross_reward - self.prev_cross_reward)*self.agent.interval*self.time_to_waypoint_ratio
+        # #waypoint reward
+        # if self.agent.cross_reward > self.prev_cross_reward:
+        #     reward += (self.agent.cross_reward - self.prev_cross_reward)*self.agent.interval*self.time_to_waypoint_ratio
 
 
-        #reverse penalty
-        if not (self.agent.bbox_list[(self.agent.int_counter - self.death_line_dis) % len(self.agent.bbox_list)].has_crossed(self.agent.vehicle.transform))[0]:
-            reward -= 200
-            self.crash_check = True
+        # #reverse penalty
+        # if not (self.agent.bbox_list[(self.agent.int_counter - self.death_line_dis) % len(self.agent.bbox_list)].has_crossed(self.agent.vehicle.transform))[0]:
+        #     reward -= 200
+        #     self.crash_check = True
 
         #stalled penalty
-        if self.agent.int_counter > 5 and self.agent.vehicle.get_speed(self.agent.vehicle) < 1:
+        if self.agent.vehicle.get_speed(self.agent.vehicle) < 1:
             self.stopped_counter += 1
             if self.stopped_counter >= self.stopped_max_count:
                 reward -= 200
                 self.crash_check = True
         #crash penalty
         if self.carla_runner.get_num_collision() > 0:
-            reward -= 200
+            reward -= 1000
             self.crash_check = True
 
 
-        # log prev info for next reward computation
-        self.prev_speed = Vehicle.get_speed(self.agent.vehicle)
-        self.prev_cross_reward = self.agent.cross_reward
+        # # log prev info for next reward computation
+        # self.prev_speed = Vehicle.get_speed(self.agent.vehicle)
+        # self.prev_cross_reward = self.agent.cross_reward
         return reward
 
     def _get_obs(self) -> np.ndarray:
@@ -253,6 +256,10 @@ class ROARppoEnvE2E(ROAREnv):
                                                                  next_bbox_list=next_bbox_list
                                                     )
 
+            # put da car
+            for j in range(4):
+                map_list[j][2][59:67,40:45] = 0.8
+                map_list[j][3][59:67,40:45] = 0.8
 
             cv2.imshow("data", np.hstack(np.hstack(map_list))) # uncomment to show occu map
             cv2.waitKey(1)

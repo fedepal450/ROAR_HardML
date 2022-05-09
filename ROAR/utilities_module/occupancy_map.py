@@ -66,6 +66,9 @@ class OccupancyGridMap(Module):
         self.curr_obstacle_world_coords = None
         self._curr_obstacle_occu_coords = None
         self._static_obstacles: Optional[np.ndarray] = None
+        self.blindspot_mask = self.make_mask(40, np.array([66, 42]), 84, 84)
+        self.num_latency_frames = 2
+        self.buffered_frames = np.zeros((4 + self.num_latency_frames, 4, 84, 84))
 
     def _initialize_map(self):
         x_total = self._max_x - self._min_x + 2 * self._map_additiona_padding
@@ -85,6 +88,20 @@ class OccupancyGridMap(Module):
                                                 np.array([[location.x, location.z]
                                                           for location in locations]) *
                                                 self._world_coord_resolution)
+
+    def make_mask(self, deg, car_pos, frame_height, frame_width):
+        angle = math.radians(deg)/2.0
+        blindspot_array = np.ones((frame_height, frame_width))
+        for i in range(0, frame_width):
+            height = car_pos[0] - round(math.tan((math.pi / 2) - angle) * i)
+            if height < 0:
+                height = 0
+            if i + car_pos[1] < frame_width:
+                for j in range(height, frame_height):
+                    blindspot_array[j][i + car_pos[1]] = 0
+        mir = np.fliplr(blindspot_array)
+
+        return blindspot_array * mir
 
     def cord_translation_from_world(self,
                                     world_cords_xy: np.ndarray) -> np.ndarray:
@@ -356,7 +373,7 @@ class OccupancyGridMap(Module):
             vehicle_x,vehicle_y=self.location_to_occu_cord(location=transform_list[i].location)[0]
             vehicle_x+=(first_cut_size[0] // 2)-x
             vehicle_y+=(first_cut_size[1] // 2)-y
-            v_map[vehicle_y-2:vehicle_y+3, vehicle_x-4:vehicle_x+4] = 0.8
+            # v_map[vehicle_y-2:vehicle_y+3, vehicle_x-4:vehicle_x+4] = 0.8
 
             w_map=map_to_view.copy()
             w_map[w_map>=1]-=1
@@ -385,11 +402,24 @@ class OccupancyGridMap(Module):
             ret.append(tmp)
 
             final_ret = np.array(ret)
-            blindspot_array = np.zeros((28,84))
-            for j in range(len(ret)):
-                final_ret[j][0][56:84][:] = blindspot_array
+            # blindspot_array = np.vstack((np.ones((56, 84)), np.zeros((28, 84))))
+            blackout_array = np.zeros((84, 84))
 
-        return final_ret
+
+            for j in range(len(ret)):
+                final_ret[j][0][:][:] = final_ret[j][0][:][:] * self.blindspot_mask
+                final_ret[j][1][:][:] = blackout_array
+                final_ret[j][3][:][:] = final_ret[j][3][:][:] * self.blindspot_mask
+
+            self.buffered_frames[5] = self.buffered_frames[4]
+            self.buffered_frames[4] = self.buffered_frames[3]
+            self.buffered_frames[3] = self.buffered_frames[2]
+            self.buffered_frames[2] = self.buffered_frames[1]
+            self.buffered_frames[1] = self.buffered_frames[0]
+            self.buffered_frames[0] = final_ret[0]
+
+
+        return self.buffered_frames[2:6]
 
 
     def cropped_occu_to_world(self,
