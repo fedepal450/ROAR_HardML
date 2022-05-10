@@ -1,3 +1,5 @@
 ROAR_gym/output
 
 ROAR_gym/wandb
+ROAR_gym/models
+ROAR_gym/runs
