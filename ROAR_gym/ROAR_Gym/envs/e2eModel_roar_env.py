@@ -100,6 +100,7 @@ class ROARppoEnvE2E(ROAREnv):
 
         self.deadzone_trigger = True
         self.deadzone_level = 0.001
+        self.overlap = False
 
     def step(self, action: Any) -> Tuple[Any, float, bool, dict]:
         obs = []
@@ -193,6 +194,8 @@ class ROARppoEnvE2E(ROAREnv):
         #     return True
         if self.carla_runner.get_num_collision() > self.max_collision_allowed:
             return True
+        elif self.overlap:
+            return True
         elif self.agent.finish_loop:
             self.complete_loop=True
             return True
@@ -229,7 +232,7 @@ class ROARppoEnvE2E(ROAREnv):
                 reward -= 200
                 self.crash_check = True
         #crash penalty
-        if self.carla_runner.get_num_collision() > 0:
+        if self.carla_runner.get_num_collision() > 0 or self.overlap:
             reward -= 1000
             self.crash_check = True
 
@@ -255,7 +258,11 @@ class ROARppoEnvE2E(ROAREnv):
                                                     bbox_list=self.agent.frame_queue,
                                                                  next_bbox_list=next_bbox_list
                                                     )
-
+            self.overlap = False
+            for i in range(59,67):
+                for k in range(40,45):
+                    if map_list[0][0][i][k] != 0:
+                        self.overlap = True
             # put da car
             for j in range(4):
                 map_list[j][2][59:67,40:45] = 0.8
