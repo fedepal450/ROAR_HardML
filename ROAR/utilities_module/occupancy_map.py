@@ -66,9 +66,15 @@ class OccupancyGridMap(Module):
         self.curr_obstacle_world_coords = None
         self._curr_obstacle_occu_coords = None
         self._static_obstacles: Optional[np.ndarray] = None
-        self.blindspot_mask = self.make_mask(40, np.array([66, 42]), 84, 84)
+        self.blindspot_mask = self.make_mask(40, np.array([78, 42]), 84, 84)
         self.num_latency_frames = 2
         self.buffered_frames = np.zeros((4 + self.num_latency_frames, 4, 84, 84))
+        self.car_loc_vert_offset = 14
+
+
+    def clear_da_buff(self):
+        self.buffered_frames = np.zeros((4 + self.num_latency_frames, 4, 84, 84))
+
 
     def _initialize_map(self):
         x_total = self._max_x - self._min_x + 2 * self._map_additiona_padding
@@ -374,6 +380,7 @@ class OccupancyGridMap(Module):
             vehicle_x+=(first_cut_size[0] // 2)-x
             vehicle_y+=(first_cut_size[1] // 2)-y
             # v_map[vehicle_y-2:vehicle_y+3, vehicle_x-4:vehicle_x+4] = 0.8
+            # v_map[vehicle_y :vehicle_y +1, vehicle_x :vehicle_x+1] = 0.8
 
             w_map=map_to_view.copy()
             w_map[w_map>=1]-=1
@@ -396,7 +403,7 @@ class OccupancyGridMap(Module):
                 image = image.rotate(yaw)
                 tmp[i] = np.asarray(image)
                 x_extra, y_extra = boundary_size[0] // 2, boundary_size[1] // 2
-                tmp[i] = tmp[i][y_extra-view_size[1]//4: tmp[i].shape[1] - y_extra-view_size[1]//4,
+                tmp[i] = tmp[i][(y_extra-view_size[1]//4) - self.car_loc_vert_offset : (tmp[i].shape[1] - y_extra-view_size[1]//4) - self.car_loc_vert_offset,
                               x_extra: tmp[i].shape[0] - x_extra]
             tmp.append(sum(tmp))
             ret.append(tmp)
@@ -406,17 +413,17 @@ class OccupancyGridMap(Module):
             blackout_array = np.zeros((84, 84))
 
 
-            for j in range(len(ret)):
-                final_ret[j][0][:][:] = final_ret[j][0][:][:] * self.blindspot_mask
-                final_ret[j][1][:][:] = blackout_array
-                final_ret[j][3][:][:] = final_ret[j][3][:][:] * self.blindspot_mask
+        for j in range(len(ret)):
+            final_ret[j][0][:][:] = final_ret[j][0][:][:] * self.blindspot_mask
+            final_ret[j][1][:][:] = blackout_array
+            final_ret[j][3][:][:] = final_ret[j][3][:][:] * self.blindspot_mask
 
-            self.buffered_frames[5] = self.buffered_frames[4]
-            self.buffered_frames[4] = self.buffered_frames[3]
-            self.buffered_frames[3] = self.buffered_frames[2]
-            self.buffered_frames[2] = self.buffered_frames[1]
-            self.buffered_frames[1] = self.buffered_frames[0]
-            self.buffered_frames[0] = final_ret[0]
+        self.buffered_frames[5] = self.buffered_frames[4]
+        self.buffered_frames[4] = self.buffered_frames[3]
+        self.buffered_frames[3] = self.buffered_frames[2]
+        self.buffered_frames[2] = self.buffered_frames[1]
+        self.buffered_frames[1] = self.buffered_frames[0]
+        self.buffered_frames[0] = final_ret[0]
 
 
         return self.buffered_frames[2:6]

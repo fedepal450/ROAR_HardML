@@ -102,6 +102,8 @@ class ROARppoEnvE2E(ROAREnv):
         self.deadzone_level = 0.001
         self.overlap = False
 
+        self.car_loc = np.array([78, 42])
+
     def step(self, action: Any) -> Tuple[Any, float, bool, dict]:
         obs = []
         rewards = []
@@ -258,15 +260,16 @@ class ROARppoEnvE2E(ROAREnv):
                                                     bbox_list=self.agent.frame_queue,
                                                                  next_bbox_list=next_bbox_list
                                                     )
+
             self.overlap = False
-            for i in range(59,67):
-                for k in range(40,45):
+            for i in range(self.car_loc[0] - 5,self.car_loc[0] +3):
+                for k in range(self.car_loc[1] - 2,self.car_loc[1] + 3):
                     if map_list[0][0][i][k] != 0:
                         self.overlap = True
             # put da car
             for j in range(4):
-                map_list[j][2][59:67,40:45] = 0.8
-                map_list[j][3][59:67,40:45] = 0.8
+                map_list[j][2][self.car_loc[0] - 5:self.car_loc[0] +3,self.car_loc[1] - 2:self.car_loc[1] + 3] = 0.8
+                map_list[j][3][self.car_loc[0] - 5:self.car_loc[0] +3,self.car_loc[1] - 2:self.car_loc[1] + 3] = 0.8
 
             cv2.imshow("data", np.hstack(np.hstack(map_list))) # uncomment to show occu map
             cv2.waitKey(1)
@@ -308,8 +311,10 @@ class ROARppoEnvE2E(ROAREnv):
             self.largest_steps=self.steps
         elif self.complete_loop and self.agent.finish_loop and self.steps<self.largest_steps:
             self.largest_steps=self.steps
+
         super(ROARppoEnvE2E, self).reset()
         self.steps=0
+        self.agent.occupancy_map.clear_da_buff()
         # self.crash_step=0
         # self.reward_step=0
         return self._get_obs()
